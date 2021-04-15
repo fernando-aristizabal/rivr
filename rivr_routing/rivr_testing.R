@@ -1,3 +1,5 @@
+library(rivr)
+
 ### RIVR DUMMY
 slope <- 0.001       # channel slope (vertical ft / horizontal ft)
 extent <- 150000     # channel length (ft)
