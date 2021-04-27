@@ -1,4 +1,20 @@
-require(rivr)
+library(rivr)
+library(doParallel)
+library(foreach)
+
+
+########## TO DO ##########################
+# 1) Transition to metric
+# 2) Fix courant number/stability issue
+# 3) Play with QQ/solver details
+# 4) save engine/QQ/solver too
+# 5) build larger sequences
+# 6) run them all
+###########################################
+
+## clear workspace and garbage collect
+rm(list = ls())
+gc()
 
 ### RIVR DUMMY
 num_of_params <- 2
@@ -23,47 +39,64 @@ desired_courant_number <- 0.04 # should be less than 0.06
 #courant_number <- velocity * dts[2] / dxs[2]
 #dx <- velocity * dts[2] / max_courant_number
 
-for (i in 1:num_of_params) {
+# detecting number of cores
+cores=detectCores()[1]
+
+# picks minimum of cores-1 or number of parameters
+cl <- makeCluster( min( 
+                       c(cores[1]-1, num_of_params)
+                      )
+                 )  
+
+# register number of cores
+registerDoParallel(cl)
+
+finalDF <- foreach (i=1:num_of_params, .combine=rbind) %dopar%{
   print(paste('Processing',i,'of',num_of_params))
+  
+  # making times and upstream boundary vectors
   times <- seq(0, max_times[i], by = dts[i])
   boundary <- ifelse(times < 9000,                  # upstream hyrograph (ft^3/s)
                      250 + (750/pi) * (1 - cos(pi * times/(4500))), 250)
   
+  # trying to find optimal spatial resolution, dx, to optimize courant number
   dxs <- rep(NA,length(times))
   iii <- 1
   for (b in boundary) {
-    normal_depth <- normal_depth(slopes[i],mannings[i],b,1,Cms[2],widths[i],sideslopes[i])
-    channel_geometry <- channel_geom(normal_depth,widths[i],sideslopes[i])
+    norm_dep <- rivr::normal_depth(slopes[i],mannings[i],b,1,Cms[2],widths[i],sideslopes[i])
+    channel_geometry <- rivr::channel_geom(norm_dep,widths[i],sideslopes[i])
     velocity <- b / channel_geometry[['A']]
     dxs[iii] <- velocity * dts[i] / desired_courant_number
     iii <- iii + 1
   }
-
   dx <- max(dxs)
   numnodes <- ceiling(extents[i]/dx) + 1
   dx <- extents[i]/(numnodes - 1)
-  
+ 
+  # set monitoring nodes and times 
   monpoints <- seq(1, numnodes,1)                  # Nodes to monitor
   montimes <- seq(1, length(boundary), by = dts[i])     # time steps to monitor
 
-  downstream <- rep(-1, length(boundary)) # downstream condition (<0 is zero gradient condition)
+  # set downstream condition (<0 is zero gradient condition)
+  downstream <- rep(-1, length(boundary)) 
 
+  # solve for wave
   print('   Routing wave')
-  d <- route_wave(slopes[i], mannings[i], Cms[i], gs[i], widths[i], sideslopes[i], 
-                  initflows[i], boundary,
-                  downstream, timestep = dts[i], spacestep = dx, numnodes = numnodes,
-                  monitor.nodes = monpoints, monitor.times = montimes, engine = "Dynamic",
-                  boundary.type = "QQ")
+  d <- rivr::route_wave(slopes[i], mannings[i], Cms[i], gs[i], widths[i], sideslopes[i], 
+                        initflows[i], boundary,
+                        downstream, timestep = dts[i], spacestep = dx, numnodes = numnodes,
+                        monitor.nodes = monpoints, monitor.times = montimes, engine = "Dynamic",
+                        boundary.type = "QQ")
   
-  # data frame
+  # data frame building of data
   print('   Building dataframe')
   num_of_sims <- length(d$flow)
   num_of_times <- length(times)
   all_boundaries <- rep(NA,num_of_sims)
   all_downstreams <- rep(NA,num_of_sims)
-  
   courant_numbers <- d$velocity * dts[i] / dx
 
+  # repeats upstream and downstream boundary conditions every cycle of time indices
   for (ii in 1:num_of_sims){
     s <- d$step[ii] ; n <- d$node[ii]
     idx <- s + (n-1)*num_of_times
@@ -71,8 +104,11 @@ for (i in 1:num_of_params) {
     all_downstreams[idx] <- downstream[s]
   }
 
-  df <- data.frame(
-                    cbind(rep(slopes[i],num_of_sims),
+  # data frame
+  dafr <- data.frame(
+                    cbind(
+                          rep(i,num_of_sims),
+                          rep(slopes[i],num_of_sims),
                           rep(mannings[i],num_of_sims),
                           rep(widths[i],num_of_sims),
                           rep(initflows[i],num_of_sims),
@@ -92,18 +128,18 @@ for (i in 1:num_of_params) {
     )
   )
   
-  names(df) <- c('slope','mannings','width_ft','initflow_cfs',
+  # column names
+  names(dafr) <- c('experiment_number','slope','mannings','width_ft','initflow_cfs',
                  'dx_ft','dt_s','upstream_boundary_cfs','downstream_ft',
                  'courant_number','node','step','distance_ft',
                  'time_s','flow_cfs','velocity_fps','depth_ft',
                  'area_sqft')
-  
-  if (i==1){
-    dfs <- df
-  } else {
-    dfs <- rbind(dfs,df)
-  }
+  dafr
   
 }  
 
+# stop parallel compute cluster
+stopCluster(cl)
 
+# write out combined df
+write.csv(finalDF,'/data/rivr_params_20210427.csv',row.names=F)
