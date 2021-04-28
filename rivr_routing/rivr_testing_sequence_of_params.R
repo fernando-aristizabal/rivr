@@ -4,8 +4,6 @@ library(foreach)
 
 
 ########## TO DO ##########################
-# 1) Transition to metric
-# 2) Fix courant number/stability issue
 # 3) Play with QQ/solver details
 # 4) save engine/QQ/solver too
 # 5) build larger sequences
@@ -152,6 +150,12 @@ finalDF <- foreach (i=1:number_of_experiments, .combine=rbind) %dopar%{
 
 # stop parallel compute cluster
 stopCluster(cl)
+
+# check for NA flow values, presumably from unstable results
+na_indices <- is.na(finalDF$flow_cms)
+count_of_nas <- sum(na_indices)
+total_entries <- length(finalDF$flow_cms)
+message(paste(count_of_nas, 'NA flow values out',total_entries,'total flow values.'))
 
 # write out combined df
 write.csv(finalDF,'/data/rivr_params_20210428.csv',row.names=F)
