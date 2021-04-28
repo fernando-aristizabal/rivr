@@ -16,48 +16,63 @@ library(foreach)
 rm(list = ls())
 gc()
 
-### RIVR DUMMY
-num_of_params <- 2
-slopes <- c(0.001,0.01)       # channel slope (vertical ft / horizontal ft)
-extents <- c(150000,150000)     # channel length (ft)
-mannings <- c(0.11,0.07)    # Manning's roughness
-widths <- c(100,200)         # channel bottom width
-sideslopes <- c(0,1)       # channel side slope (horizontal ft / vertical ft)
-Cms <- c(1.486,1.486)          # conversion factor for Manning's equation
-gs <- c(32.2,32.2)            # gravitational acceleration (ft/s^2)
-#numnodes <- c(301,151)                    # number of finite-difference nodes
-#dxs <- extents/(numnodes - 1)        # distance between nodes (ft)
-dts <- c(20,20)                          # time interval (s)
-max_times <- c(76000,76000)
-initflows <- c(250,250)                                   # initial flow condition (ft^3/s)
+#########################################################
+### Parameters to Use ###
 
-desired_courant_number <- 0.04 # should be less than 0.06
-#normal_depth <- normal_depth(slopes[2],mannings[2],initflows[2],1,Cms[2],widths[2],sideslopes[2])
-#channel_geometry <- channel_geom(normal_depth,widths[2],sideslopes[2])
-#velocity <- initflows[2] / channel_geometry[['A']]
+# number of experiments
+number_of_experiments <- 6
 
-#courant_number <- velocity * dts[2] / dxs[2]
-#dx <- velocity * dts[2] / max_courant_number
+## channel slope (%, vertical m / horizontal m) ##
+slopes <- c(0.1,0.2,0.4,0.6,0.8,1.0) / 100
+## channel length (m) ##
+extents <- rep(1500,number_of_experiments)
+## Manning's roughness ##
+mannings <- c(0.10,0.11,0.12,0.13,0.14,0.15)
+## channel bottom width (m) ## 
+widths <- c(35,35,30,30,25,25)
+## channel side slope (horizontal m / vertical m) ##
+sideslopes <- rep(0,number_of_experiments)
+## conversion factor for Manning's equation ##
+Cms <- c(1.00,number_of_experiments)
+## gravitational acceleration (m/s^2) ##
+gs <- rep(9.81,number_of_experiments)
+## time step (s) ##
+dts <- rep(20,number_of_experiments)
+## max time step (s) ##
+max_times <- rep(40000,number_of_experiments)
+## initial flow condition (m^3/s) ##
+initflows <- c(10,10,8,8,7,7)
 
-# detecting number of cores
-cores=detectCores()[1]
+## Set desired courant number for stability ##
+# should be less than 0.06 for Dynamic wave
+desired_courant_number <- 0.04 
+
+################################################################################
+
+# detecting number of cores on machine
+cores <- detectCores()[1]
 
 # picks minimum of cores-1 or number of parameters
 cl <- makeCluster( min( 
-                       c(cores[1]-1, num_of_params)
+                       c(cores[1]-1, number_of_experiments)
                       )
                  )  
 
 # register number of cores
 registerDoParallel(cl)
 
-finalDF <- foreach (i=1:num_of_params, .combine=rbind) %dopar%{
-  print(paste('Processing',i,'of',num_of_params))
+finalDF <- foreach (i=1:number_of_experiments, .combine=rbind) %dopar%{
+  print(paste('Processing',i,'of',number_of_experiments))
   
   # making times and upstream boundary vectors
   times <- seq(0, max_times[i], by = dts[i])
-  boundary <- ifelse(times < 9000,                  # upstream hyrograph (ft^3/s)
-                     250 + (750/pi) * (1 - cos(pi * times/(4500))), 250)
+
+  # upstream hyrograph (m^3/s)
+  boundary <- ifelse(times < 9000,
+                     7 + (750/pi) * (1 - cos(pi * times/(4500))), 7)
+  
+  # set downstream condition (<0 is zero gradient condition)
+  downstream <- rep(-1, length(boundary)) 
   
   # trying to find optimal spatial resolution, dx, to optimize courant number
   dxs <- rep(NA,length(times))
@@ -74,14 +89,11 @@ finalDF <- foreach (i=1:num_of_params, .combine=rbind) %dopar%{
   dx <- extents[i]/(numnodes - 1)
  
   # set monitoring nodes and times 
-  monpoints <- seq(1, numnodes,1)                  # Nodes to monitor
-  montimes <- seq(1, length(boundary), by = dts[i])     # time steps to monitor
-
-  # set downstream condition (<0 is zero gradient condition)
-  downstream <- rep(-1, length(boundary)) 
+  monpoints <- seq(1, numnodes,1)                    # Nodes to monitor
+  montimes <- seq(1, length(boundary), by = dts[i])  # time steps to monitor
 
   # solve for wave
-  print('   Routing wave')
+  #print('   Routing wave')
   d <- rivr::route_wave(slopes[i], mannings[i], Cms[i], gs[i], widths[i], sideslopes[i], 
                         initflows[i], boundary,
                         downstream, timestep = dts[i], spacestep = dx, numnodes = numnodes,
@@ -89,14 +101,14 @@ finalDF <- foreach (i=1:num_of_params, .combine=rbind) %dopar%{
                         boundary.type = "QQ")
   
   # data frame building of data
-  print('   Building dataframe')
+  #print('   Building dataframe')
   num_of_sims <- length(d$flow)
   num_of_times <- length(times)
-  all_boundaries <- rep(NA,num_of_sims)
-  all_downstreams <- rep(NA,num_of_sims)
   courant_numbers <- d$velocity * dts[i] / dx
 
   # repeats upstream and downstream boundary conditions every cycle of time indices
+  all_boundaries <- rep(NA,num_of_sims)
+  all_downstreams <- rep(NA,num_of_sims)
   for (ii in 1:num_of_sims){
     s <- d$step[ii] ; n <- d$node[ii]
     idx <- s + (n-1)*num_of_times
@@ -129,11 +141,11 @@ finalDF <- foreach (i=1:num_of_params, .combine=rbind) %dopar%{
   )
   
   # column names
-  names(dafr) <- c('experiment_number','slope','mannings','width_ft','initflow_cfs',
-                 'dx_ft','dt_s','upstream_boundary_cfs','downstream_ft',
-                 'courant_number','node','step','distance_ft',
-                 'time_s','flow_cfs','velocity_fps','depth_ft',
-                 'area_sqft')
+  names(dafr) <- c('experiment_number','slope','mannings','width_m','initflow_cms',
+                 'dx_m','dt_s','upstream_boundary_cms','downstream_m',
+                 'courant_number','node','step','distance_m',
+                 'time_s','flow_cms','velocity_mps','depth_m',
+                 'area_sqm')
   dafr
   
 }  
@@ -142,4 +154,4 @@ finalDF <- foreach (i=1:num_of_params, .combine=rbind) %dopar%{
 stopCluster(cl)
 
 # write out combined df
-write.csv(finalDF,'/data/rivr_params_20210427.csv',row.names=F)
+write.csv(finalDF,'/data/rivr_params_20210428.csv',row.names=F)
