@@ -1,49 +1,31 @@
+##########################################
+##########################################
+#### River Routing Toy Training Data #####
+## Fernando Aristizabal
+## In support of dynamic wave project
+## Collaborating with Greg Petrochenkov
+
+##########################################
+##########################################
+
 library(rivr)
 library(doParallel)
 library(foreach)
-
+library(rhdf5)
+library(stringr)
 
 ########## TO DO ##########################
 # 1) Get stability
 # 2) Realistic values
-# 6) run them all
+# 3) run them all
 ###########################################
 
 ## clear workspace and garbage collect
 rm(list = ls())
 gc()
 
-################################################################################
-### Parameters to Use ###
-################################################################################
-
-## channel slope ( vertical m / horizontal m) ##
-slopes <- seq(0.001,0.02,0.003)
-## channel length (m) ##
-extents <- 1500
-## Manning's roughness ##
-mannings <- seq(0.04,0.20,0.02)
-## channel bottom width (m) ## 
-widths <- seq(20,50,5)
-## channel side slope (horizontal m / vertical m) ##
-sideslopes <- seq(0,1,0.2)
-## time step (s) ##
-dts <- 10
-## max time step (s) ##
-max_times <- 40000
-## initial flow condition (m^3/s) ##
-initflows <- seq(4,10,2)
-## conversion factor for Manning's equation ##
-Cm <- 1.00
-## gravitational acceleration (m/s^2) ##
-g <- 9.81
-## Set desired courant number for stability ##
-# should be less than 0.06 for Dynamic wave
-desired_courant_number <- 0.04 
-## output file template name ##
-output_file_name <- '/data/outputs_20210506/rivr_params_20210506.csv'
-## cores to use ##
-cores <- 6
+# source input parameters
+source("/rivr/rivr_testing_params_1.R")
 
 ################################################################################
 ################################################################################
@@ -65,7 +47,15 @@ ext <- tools::file_ext(output_file_name)
 base_file <- tools::file_path_sans_ext(output_file_name)
 id_len <- nchar(toString(number_of_experiments))
 outputs_directory <- dirname(output_file_name)
-dir.create(outputs_directory,recursive=TRUE)
+if ( !dir.exists(outputs_directory) ) { dir.create(outputs_directory,recursive=TRUE, mode='00774') } 
+
+# write input parameters to hdf5 file
+if (file.exists(output_file_name)) { file.remove(output_file_name) }
+h5createFile(output_file_name)
+h5createGroup(output_file_name,'rivr_data')
+h5createGroup(output_file_name,'rivr_data/outputs')
+h5write(input_params,file=output_file_name,name='rivr_data/inputs')
+
 
 ################################################################################
 ################################################################################
@@ -169,15 +159,6 @@ finalDF <- foreach (i=1:number_of_experiments) %dopar%{
   outputs <- data.frame(
                     cbind(
                           rep(i,number_of_simulation_points),
-                          rep(max_time,number_of_simulation_points),
-                          rep(dt,number_of_simulation_points),
-                          rep(dx,number_of_simulation_points),
-                          rep(slope,number_of_simulation_points),
-                          rep(manning,number_of_simulation_points),
-                          rep(width,number_of_simulation_points),
-                          rep(sideslope,number_of_simulation_points),
-                          rep(extent,number_of_simulation_points),
-                          rep(initflow,number_of_simulation_points),
                           any_na_flows,
                           all_boundaries,
                           all_downstreams,
@@ -194,9 +175,7 @@ finalDF <- foreach (i=1:number_of_experiments) %dopar%{
   )
   
   # column names
-  names(outputs) <- c('experiment_number','max_time_s','dt_s','dx_m',
-                      'channel_slope','manningsn','channel_bottom_width_m',
-                      'side_slope','extent_m','initial_flow_cms',
+  names(outputs) <- c('experiment_number',
                       'any_NAs_in_experiment','upstream_boundary_cms',
                       'downstream_m','courant_number','node','step',
                       'distance_m','time_s','flow_cms','velocity_mps',
@@ -205,10 +184,28 @@ finalDF <- foreach (i=1:number_of_experiments) %dopar%{
   # write out outputs
   id <- toString(i)
   full_id <- stringr::str_pad(id,id_len,"0",side='left')
-  write.csv(outputs,paste0(base_file,"_",full_id,".",ext),row.names=F)
+  write.csv(outputs,paste0(base_file,"_",full_id,".csv"),row.names=F)
   
 }  
 
 # stop parallel compute cluster
 stopCluster(cl)
 
+#### aggregate CSV files to hdf5 ###
+message("Aggregating CSV files to HDF5 ...")
+csv_list <- Sys.glob(file.path(outputs_directory,"*.csv"))
+pb <- txtProgressBar(min = 0, max= length(csv_list), style=3, char="=")
+
+i <- 1
+for (csv in csv_list) {
+  outputs <- read.csv(csv)
+  full_id <- tail(stringr::str_split(tools::file_path_sans_ext(basename(csv)),'_')[[1]],n=1)
+  output_dataset_name <- paste0('rivr_data/outputs/',full_id)
+  rhdf5::h5write(outputs,file=output_file_name,name=output_dataset_name)
+  file.remove(csv)
+  setTxtProgressBar(pb,i)
+  i <- i + 1
+}
+
+close(pb)
+message('\n')
