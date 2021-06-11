@@ -17,7 +17,7 @@ dts <- 10
 ## max time step (s) ##
 max_times <- 40000
 ## initial flow condition (m^3/s) ##
-initflows <- seq(4,10,2)
+initflows <- seq(8,14,2)
 ## conversion factor for Manning's equation ##
 Cm <- 1.00
 ## gravitational acceleration (m/s^2) ##
@@ -26,6 +26,6 @@ g <- 9.81
 # should be less than 0.06 for Dynamic wave
 desired_courant_number <- 0.04 
 ## output file template name ##
-output_file_name <- '/data/outputs_20210526/rivr_output_params.h5'
+output_file_name <- '/data/outputs_20210608/rivr_output_params.h5'
 ## cores to use ##
 cores <- 7

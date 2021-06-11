@@ -9,7 +9,7 @@ extents <- 1500
 ## Manning's roughness ##
 mannings <- c(0.04,0.06,0.08)
 ## channel bottom width (m) ## 
-widths <- 20
+widths <- c(20,25)
 ## channel side slope (horizontal m / vertical m) ##
 sideslopes <- 0
 ## time step (s) ##
@@ -26,6 +26,6 @@ g <- 9.81
 # should be less than 0.06 for Dynamic wave
 desired_courant_number <- 0.04 
 ## output file template name ##
-output_file_name <- '/data/outputs_20210526/rivr_output_params.h5'
+output_file_name <- '/data/outputs_TESTING/rivr_output_params.h5'
 ## cores to use ##
 cores <- 3
