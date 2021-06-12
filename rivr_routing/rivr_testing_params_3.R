@@ -3,21 +3,21 @@
 ################################################################################
 
 ## channel slope ( vertical m / horizontal m) ##
-slopes <- seq(0.001,0.01,0.002)
+slopes <- c(0.009)
 ## channel length (m) ##
 extents <- 1500
 ## Manning's roughness ##
-mannings <- seq(0.10,0.20,0.02)
+mannings <- c(0.06,0.10,0.20)
 ## channel bottom width (m) ## 
-widths <- seq(20,50,5)
+widths <- c(20,30,50)
 ## channel side slope (horizontal m / vertical m) ##
-sideslopes <- seq(0,1,0.25)
+sideslopes <- c(0,0.5,1)
 ## time step (s) ##
 dts <- 2.5
 ## max time step (s) ##
-max_times <- 25000
+max_times <- 30000
 ## initial flow condition (m^3/s) ##
-initflows <- seq(24,36,4)
+initflows <- c(24,30,36)
 ## conversion factor for Manning's equation ##
 Cm <- 1.00
 ## gravitational acceleration (m/s^2) ##

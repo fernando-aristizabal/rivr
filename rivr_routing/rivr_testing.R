@@ -25,7 +25,7 @@ rm(list = ls())
 gc()
 
 # source input parameters
-source("/rivr/rivr_testing_params_2.R")
+source("/rivr/rivr_testing_params_1.R")
 
 ################################################################################
 ################################################################################
@@ -98,7 +98,7 @@ additional_experiment_params <- foreach (i=1:number_of_experiments,.combine='rbi
   downstream <- rep(-1, length(times)) 
   
   # upstream hyrograph (m^3/s)
-  boundary <- ifelse(times < 9000,
+  boundary <- ifelse(((times >= 5000) & (times < 10000)) | ((times>=15000) & (times<20000)),
                      initflow + (750/pi) * (1 - cos(pi * times/(4500))), initflow)
   
   # trying to find optimal spatial resolution, dx, to optimize courant number
@@ -119,13 +119,15 @@ additional_experiment_params <- foreach (i=1:number_of_experiments,.combine='rbi
   monpoints <- 1:numnodes  # Nodes to monitor
   montimes <- 1:num_of_times  # time steps to monitor
 
-  # solve for wave
+  # solve for wave and time
+  start_time <- Sys.time()
   d <- rivr::route_wave(slope, manning, Cm, g, width, sideslope, 
                         initflow, boundary,
                         downstream, timestep = dt, spacestep = dx, numnodes = numnodes,
                         monitor.nodes = monpoints, monitor.times = montimes, engine = "Dynamic",
                         boundary.type = "QQ"
                         )
+  compute_time_s <- as.double(Sys.time() - start_time)
   
   # crop d data frame. for some reason it duplicates data. 
   # maybe bc of steps/nodes then monnodes/montimes
@@ -179,9 +181,10 @@ additional_experiment_params <- foreach (i=1:number_of_experiments,.combine='rbi
   # create dataframe with additional experiment parameters to rbind 
   data.frame( 
               stability= as.integer(!any(is.na(d$flow))),
-              dx=dx
+              dx=dx,
               num_of_nodes=numnodes,
-              num_of_times = num_of_times
+              num_of_times = num_of_times,
+              compute_time_s = compute_time_s
             )
   
 }  

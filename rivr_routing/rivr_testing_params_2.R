@@ -13,7 +13,7 @@ widths <- c(20,25)
 ## channel side slope (horizontal m / vertical m) ##
 sideslopes <- 0
 ## time step (s) ##
-dts <- 10
+dts <- 5
 ## max time step (s) ##
 max_times <- 40000
 ## initial flow condition (m^3/s) ##
