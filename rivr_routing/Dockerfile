@@ -1,12 +1,13 @@
 FROM rocker/r-devel:latest
 
+# INSTALL PACKAGES
 RUN R -e "install.packages('rivr',dependencies=TRUE, repos='http://cran.rstudio.com/')"
 RUN R -e "install.packages('doParallel',dependencies=TRUE, repos='http://cran.rstudio.com/')"
 RUN R -e "install.packages('BiocManager',dependencies=TRUE, repos='http://cran.rstudio.com/')"
 RUN R -e "BiocManager::install('rhdf5')"
 
-#RUN apt update && \
-#    apt install -y postgresql \
-#    postgresql-contrib \
-#    && rm -rf /var/lib/apt/lists/*
-
+# USER AND GROUP
+ARG GroupID=1370800235
+ARG GroupName=fim
+RUN addgroup --gid $GroupID $GroupName
+USER root:$GroupName
