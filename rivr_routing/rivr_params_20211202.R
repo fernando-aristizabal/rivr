@@ -5,7 +5,7 @@
 ## channel slope ( vertical m / horizontal m) ##
 slopes <- c(0.005,0.01)
 ## channel length (m) ##
-extents <- 500
+extents <- 1000
 ## pde ##
 pdes <- "Dynamic" #c("Kinematic","Dynamic")
 ## max spatial resolution (m) ##
