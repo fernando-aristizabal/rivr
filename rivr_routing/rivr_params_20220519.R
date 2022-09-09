@@ -3,7 +3,7 @@
 ################################################################################
 
 ## channel slope ( vertical m / horizontal m) ##
-slopes <- c(0.005,0.01)
+slopes <- c(0.005,0.0063,0.0076,0.0089,0.01)
 ## channel length (m) ##
 extents <- 1000
 ## pde ##
@@ -11,9 +11,9 @@ pdes <- "Dynamic" #c("Kinematic","Dynamic")
 ## max spatial resolution (m) ##
 dxs <- 10
 ## Manning's roughness ##
-mannings <- c(0.10,0.15)
+mannings <- c(0.10,0.11,0.12,0.13,0.14,0.15)
 ## channel bottom width (m) ## 
-widths <- c(20,40)
+widths <- c(20,25,30,35,40)
 ## channel side slope (horizontal m / vertical m) ##
 sideslopes <- 0
 ## time step (s) ##
@@ -22,7 +22,8 @@ dts <- 1
 # this gets overwritten if maximum boundary file 
 max_times <- 1000
 ## initial flow condition (m^3/s) ##
-initflows <- 4 #4.020992
+#initflows <- c(4,6,8,10) #4.020992
+initflows <- c(4) #4.020992
 ## monitoring node spacing ##
 monitoring_node_step_sizes <- 1
 ## monitoring times spacing ##
@@ -32,7 +33,7 @@ Cm <- 1.00
 ## gravitational acceleration (m/s^2) ##
 g <- 9.81
 ## output file template name ##
-output_file_name <- '/data/rivr_outputs/outputs_20211202/rivr_output_params.h5'
+output_file_name <- '/data/rivr_outputs/outputs_20220519/rivr_output_params.h5'
 ## experiment id character length ##
 experiment_id_character_length <- 4
 ## aggregate files ##

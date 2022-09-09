@@ -22,7 +22,7 @@ rm(list = ls())
 gc()
 
 # source input parameters
-source("/rivr/rivr_params_20211202.R")
+source("/rivr/rivr_params_20220731.R")
 
 # source functions
 source("rivr/rivr_functions.R")
@@ -35,6 +35,7 @@ Sys.umask(mode="002")
 
 experiment_params <- expand.grid( slopes, extents, dxs, mannings, widths, 
                                   sideslopes, dts, max_times, initflows, pdes,
+                                  amplitudes, numbers_of_cycles, periods, 
                                   monitoring_node_step_sizes, monitoring_time_step_sizes,
                                   stringsAsFactors=FALSE
                                 )
@@ -42,6 +43,7 @@ experiment_params <- expand.grid( slopes, extents, dxs, mannings, widths,
 # column names
 names(experiment_params) <- c('slope','extent_m','dx_m','mannings','width_m','sideslope',
                               'dt_s','maxtime_s','initflow_cms','pde',
+                              'bc_amplitude_cms','bc_number_of_cycles', 'bc_period_s',
                               'monitoring_node_step_size', 'monitoring_time_step_size')
 
 # load boundary condition if using empirical datasource
@@ -87,7 +89,7 @@ h5createGroup(output_file_name,'rivr_data/outputs')
 ################################################################################
 
 # detecting number of cores on machine
-#cores <- detectCores()[1]
+cores <- detectCores()[1]
 
 # picks minimum of cores-1 or number of parameters
 cl <- makeCluster( min( 
@@ -119,6 +121,9 @@ additional_experiment_params <- foreach (i=1:number_of_experiments,.combine='rbi
     extent <- experiment_params[i,'extent_m']
     dx <- experiment_params[i,'dx_m']
     initflow <- experiment_params[i,'initflow_cms']
+    amplitude <- experiment_params[i,'bc_amplitude_cms']
+    number_of_cycles <- experiment_params[i,'bc_number_of_cycles']
+    period <- experiment_params[i,'bc_period_s']
     monitoring_node_step_size <- experiment_params[i,'monitoring_node_step_size']
     monitoring_time_step_size <- experiment_params[i,'monitoring_time_step_size']
 
@@ -130,7 +135,7 @@ additional_experiment_params <- foreach (i=1:number_of_experiments,.combine='rbi
     downstream <- rep(-1, length(times)) 
 
     # upstream hyrograph (m^3/s)
-    boundary <- boundary_condition(times,initflow)
+    boundary <- boundary_condition(times,initflow,amplitude,period,number_of_cycles)
 
     # update dx to get number of nodes to integer
     num_of_nodes <- ceiling(extent/dx) + 1
@@ -157,10 +162,22 @@ additional_experiment_params <- foreach (i=1:number_of_experiments,.combine='rbi
     # crop d
     d <- d[1:number_of_simulation_points,]
 
-    # determine values: courant numbers & friction slope
+    #### determine additional values ####
+    # courant number
     courant_numbers <- d$velocity * dt / dx
+
+    # hydraulic radius
     hydraulic_radius <- sapply(d$depth,function(D,B,SS) as.numeric(rivr::channel_geom(D,B,SS)['R']),B=width,SS=sideslope)
-    friction_slope <- friction_slope_mannings(mannings,d$velocity,Cm,hydraulic_radius)
+
+    # wetted perimeter
+    wetted_perimeter <- sapply(d$depth,function(D,B,SS) as.numeric(rivr::channel_geom(D,B,SS)['P']),B=width,SS=sideslope)
+    
+    # conveyance
+    #conveyance <- mapply(rivr::conveyance, manning,d$area[1:number_of_simulation_points],hydraulic_radius,Cm)
+    conveyance <- mapply(rivr::conveyance, manning,d$area, hydraulic_radius, Cm)
+
+    # friction slope
+    friction_slope <- friction_slope_mannings(d$flow,conveyance)
 
     # repeats upstream and downstream boundary conditions every cycle of time indices
     all_boundaries <- rep(NA,number_of_simulation_points)
@@ -187,13 +204,13 @@ additional_experiment_params <- foreach (i=1:number_of_experiments,.combine='rbi
                          depth_m = d$depth[1:number_of_simulation_points],
                          area_sqm = d$area[1:number_of_simulation_points],
                          friction_slope = friction_slope,
-                         hydraulic_radius = hydraulic_radius
+                         hydraulic_radius = hydraulic_radius,
+                         wetted_perimeter = wetted_perimeter,
+                         conveyance = conveyance
                         )
 
     # experiment ids
     experiment_id <- convert_experiment_number_to_ids(i, experiment_id_character_length)
-    #id <- toString(i)
-    #experiment_id <- stringr::str_pad(id,experiment_id_character_length,"0",side='left')
 
     # create hdf5 file and groups
     experiment_output_file_name <- paste0(base_file,"_",experiment_id,".h5")
@@ -209,9 +226,12 @@ additional_experiment_params <- foreach (i=1:number_of_experiments,.combine='rbi
     stability <- as.integer(!any(is.na(d$flow)))
 
     # print message with info
-    message(paste("Exp#:",i ,"| Stable:", stability, "| Compute Time:", compute_time_s,"| dx:",dx,
-                "| mannings:",mannings, "| slope:", slope, "| sideslope:",sideslope,"| width:",width))
-    message('')
+    message(paste("Exp#:",i))
+    message(paste("  Stable:", stability, "| Compute Time:", compute_time_s,"| dx:",dx))
+    message(paste("  mannings:",manning, "| slope:", slope, "| sideslope:",sideslope))
+    message(paste("  width:",width,"| amplitude:",amplitude))
+    message(paste("  number of cycles:",number_of_cycles,"| period:",period))
+    #message('')
 
     # create dataframe with additional experiment parameters to rbind 
     #additional_experiment_params <- data.frame( 

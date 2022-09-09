@@ -2,9 +2,10 @@ library(stringr)
 
 
 # calculates friction slope from Manning's equation
-friction_slope_mannings <- function(mannings_n, velocity, conversion_factor, hydraulic_radius) {
+friction_slope_mannings <- function(Q, C) {
 
-    friction_slope <- (  (mannings_n * velocity) / ( conversion_factor * (hydraulic_radius^(2/3)) )  )^2
+    #friction_slope <- (  (mannings_n * velocity) / ( conversion_factor * (hydraulic_radius^(2/3)) )  )^2
+    friction_slope <- (Q/C) ^ 2.0
 
     return(friction_slope)
 
